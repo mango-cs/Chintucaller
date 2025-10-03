@@ -18,6 +18,7 @@ class _NameInputAndProfileSetupState extends State<NameInputAndProfileSetup> {
   final TextEditingController _nameController = TextEditingController();
   String _selectedProfile = 'Personal';
   String _selectedLanguage = 'English';
+  String _selectedGender = 'Male'; // New: Gender selection
   String? _nameError;
   bool _isLoading = false;
 
@@ -69,15 +70,22 @@ class _NameInputAndProfileSetupState extends State<NameInputAndProfileSetup> {
     });
 
     // Simulate profile creation process
-    await Future.delayed(const Duration(seconds: 2));
+    await Future.delayed(const Duration(milliseconds: 500));
 
     if (mounted) {
       setState(() {
         _isLoading = false;
       });
 
-      // Navigate to activating assistant progress
-      Navigator.pushNamed(context, '/activating-assistant-progress');
+      // Navigate to voice selection screen (pass name and gender)
+      Navigator.pushNamed(
+        context,
+        '/voice-selection-screen',
+        arguments: {
+          'name': _nameController.text.trim(),
+          'gender': _selectedGender,
+        },
+      );
     }
   }
 
@@ -120,6 +128,11 @@ class _NameInputAndProfileSetupState extends State<NameInputAndProfileSetup> {
                             errorText: _nameError,
                             onChanged: (value) => _validateName(),
                           ),
+
+                          SizedBox(height: 4.h),
+
+                          // Gender selector
+                          _buildGenderSelector(),
 
                           SizedBox(height: 4.h),
 
@@ -221,6 +234,79 @@ class _NameInputAndProfileSetupState extends State<NameInputAndProfileSetup> {
             textAlign: TextAlign.center,
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildGenderSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Gender',
+          style: AppTheme.darkTheme.textTheme.titleSmall?.copyWith(
+            color: AppTheme.textPrimary,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        SizedBox(height: 2.h),
+        Row(
+          children: [
+            Expanded(
+              child: _buildGenderOption('Male', Icons.male),
+            ),
+            SizedBox(width: 3.w),
+            Expanded(
+              child: _buildGenderOption('Female', Icons.female),
+            ),
+            SizedBox(width: 3.w),
+            Expanded(
+              child: _buildGenderOption('Other', Icons.person),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGenderOption(String gender, IconData icon) {
+    final isSelected = _selectedGender == gender;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _selectedGender = gender;
+        });
+      },
+      child: Container(
+        padding: EdgeInsets.symmetric(vertical: 2.h),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? Color(0xFFCDFF00).withValues(alpha: 0.15)
+              : AppTheme.primaryBlack.withValues(alpha: 0.3),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? Color(0xFFCDFF00) : AppTheme.borderSubtle,
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Column(
+          children: [
+            Icon(
+              icon,
+              color: isSelected ? Color(0xFFCDFF00) : AppTheme.textSecondary,
+              size: 8.w,
+            ),
+            SizedBox(height: 1.h),
+            Text(
+              gender,
+              style: TextStyle(
+                color: isSelected ? Color(0xFFCDFF00) : AppTheme.textSecondary,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                fontSize: 12.sp,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

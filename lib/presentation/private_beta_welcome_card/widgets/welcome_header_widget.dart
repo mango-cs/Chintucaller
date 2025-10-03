@@ -84,10 +84,11 @@ class WelcomeHeaderWidget extends StatelessWidget {
 
         // Subtitle
         Text(
-          'Never miss important calls again. Our AI assistant handles unknown callers, provides live transcription, and lets you take over anytime.',
+          'Never miss important calls again',
           style: AppTheme.darkTheme.textTheme.bodyLarge?.copyWith(
             color: AppTheme.textSecondary,
             height: 1.5,
+            fontSize: 14.sp,
           ),
           textAlign: TextAlign.center,
         ),

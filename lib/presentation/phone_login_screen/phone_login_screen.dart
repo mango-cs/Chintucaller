@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:sizer/sizer.dart';
 import '../../core/app_export.dart';
 import '../../routes/app_routes.dart';
+import '../../widgets/dev_navigation_drawer.dart';
+import '../../services/permission_service.dart';
 
 class PhoneLoginScreen extends StatefulWidget {
   const PhoneLoginScreen({super.key});
@@ -36,10 +38,29 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Navigate to OTP verification screen with phone number
-      await Future.delayed(Duration(milliseconds: 500)); // Simulated delay
+      // Request notification permission first
+      await PermissionService.showPermissionDialog(
+        context: context,
+        title: 'Enable Notifications',
+        message:
+            'We need notification permission to alert you about incoming calls and important updates.',
+        onAllow: () async {
+          await PermissionService.requestNotificationPermission();
+        },
+      );
+
+      // Simulate sending OTP
+      await Future.delayed(Duration(milliseconds: 500));
 
       if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('OTP sent successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        // Navigate to OTP verification screen
         Navigator.pushNamed(
           context,
           AppRoutes.otpVerification,
@@ -60,10 +81,38 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
     }
   }
 
+  // DEVELOPMENT ONLY: Skip phone login for testing
+  void _skipLoginForDevelopment() {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('⚠️ SKIPPED LOGIN - DEV MODE ONLY'),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 2),
+        ),
+      );
+
+      // Navigate directly to home dashboard
+      Navigator.pushReplacementNamed(context, AppRoutes.homeDashboard);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
+      drawer: const DevNavigationDrawer(), // DEV ONLY
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        elevation: 0,
+        leading: Builder(
+          builder: (context) => IconButton(
+            icon: Icon(Icons.construction, color: Colors.orange),
+            tooltip: 'DEV: All Screens',
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
+        ),
+      ),
       body: SafeArea(
         child: Padding(
           padding: EdgeInsets.all(6.w),
@@ -228,6 +277,76 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
               ),
 
               SizedBox(height: 2.h),
+
+              // DEV ONLY: Navigation buttons
+              Row(
+                children: [
+                  // Go to OTP screen
+                  Expanded(
+                    child: SizedBox(
+                      height: 6.h,
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pushNamed(
+                            context, AppRoutes.otpVerification),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.blue,
+                          side: BorderSide(color: Colors.blue, width: 2),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              'NEXT',
+                              style: TextStyle(
+                                fontSize: 12.sp,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            SizedBox(width: 2.w),
+                            Icon(Icons.arrow_forward, size: 5.w),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: 2.w),
+                  // Skip to home
+                  Expanded(
+                    child: SizedBox(
+                      height: 6.h,
+                      child: OutlinedButton(
+                        onPressed: _skipLoginForDevelopment,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.orange,
+                          side: BorderSide(color: Colors.orange, width: 2),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.skip_next, size: 5.w),
+                            SizedBox(width: 1.w),
+                            Text(
+                              'SKIP',
+                              style: TextStyle(
+                                fontSize: 12.sp,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              SizedBox(height: 1.h),
             ],
           ),
         ),

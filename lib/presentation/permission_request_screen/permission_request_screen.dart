@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:sizer/sizer.dart';
+import 'package:android_intent_plus/android_intent.dart';
+import 'package:android_intent_plus/flag.dart';
 
 import '../../core/app_export.dart';
 import './widgets/expandable_info_widget.dart';
@@ -20,27 +22,37 @@ class PermissionRequestScreen extends StatefulWidget {
 class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
   final Map<String, bool> _permissionStatus = {
     'phone': false,
+    'call_log': false,
     'contacts': false,
     'microphone': false,
+    'sms': false,
     'notification': false,
-    'storage': false,
+    'default_app': false,
   };
 
   final List<Map<String, dynamic>> _permissionData = [
     {
       'key': 'phone',
       'icon': 'phone',
-      'title': 'Phone Access',
+      'title': 'Phone State',
       'description':
-          'Monitor call state and enable AI assistant to handle incoming calls automatically',
+          'Monitor call state and enable AI assistant to handle calls',
       'permission': Permission.phone,
+    },
+    {
+      'key': 'call_log',
+      'icon': 'history',
+      'title': 'Call Log',
+      'description':
+          'Access call history for AI analysis and insights',
+      'permission': Permission.phone, // Uses same permission group
     },
     {
       'key': 'contacts',
       'icon': 'contacts',
       'title': 'Contacts',
       'description':
-          'Identify known callers and apply personalized call handling rules',
+          'Identify known callers and personalize call handling',
       'permission': Permission.contacts,
     },
     {
@@ -48,24 +60,32 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
       'icon': 'mic',
       'title': 'Microphone',
       'description':
-          'Record and transcribe conversations for AI processing and call summaries',
+          'Record and transcribe conversations for AI summaries',
       'permission': Permission.microphone,
+    },
+    {
+      'key': 'sms',
+      'icon': 'sms',
+      'title': 'SMS / Messages',
+      'description':
+          'Detect spam patterns and protect from text scams',
+      'permission': Permission.sms,
     },
     {
       'key': 'notification',
       'icon': 'notifications',
       'title': 'Notifications',
       'description':
-          'Send instant call summaries, alerts, and important messages',
+          'Send call summaries, alerts, and important updates',
       'permission': Permission.notification,
     },
     {
-      'key': 'storage',
-      'icon': 'storage',
-      'title': 'Storage',
+      'key': 'default_app',
+      'icon': 'phonelink_ring',
+      'title': 'Default Dialer & Spam Blocker',
       'description':
-          'Securely store encrypted call transcripts and summaries locally',
-      'permission': Permission.storage,
+          'Set as default phone app to intercept all calls',
+      'permission': null, // Custom handling
     },
   ];
 
@@ -80,17 +100,28 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
 
   Future<void> _checkExistingPermissions() async {
     for (final permissionData in _permissionData) {
-      final permission = permissionData['permission'] as Permission;
-      final status = await permission.status;
-      setState(() {
-        _permissionStatus[permissionData['key']] = status.isGranted;
-      });
+      final permission = permissionData['permission'] as Permission?;
+      if (permission != null) {
+        final status = await permission.status;
+        setState(() {
+          _permissionStatus[permissionData['key']] = status.isGranted;
+        });
+      }
+      // default_app status will be checked separately if needed
     }
   }
 
   Future<void> _requestPermission(String key) async {
     final permissionData = _permissionData.firstWhere((p) => p['key'] == key);
-    final permission = permissionData['permission'] as Permission;
+    
+    // Handle default phone app separately
+    if (key == 'default_app') {
+      await _openDefaultPhoneAppSettings();
+      return;
+    }
+    
+    final permission = permissionData['permission'] as Permission?;
+    if (permission == null) return;
 
     try {
       final status = await permission.request();
@@ -109,6 +140,53 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
     }
   }
 
+  Future<void> _openDefaultPhoneAppSettings() async {
+    try {
+      HapticFeedback.lightImpact();
+      
+      // Request to set as default dialer - this shows the actual permission dialog
+      const intent = AndroidIntent(
+        action: 'android.telecom.action.CHANGE_DEFAULT_DIALER',
+        package: 'com.equal_ai_assistant.app',
+        flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
+      );
+      
+      await intent.launch();
+      
+      // Show a helpful message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(
+              'Tap "Yes" to set this app as your default dialer & spam blocker',
+            ),
+            backgroundColor: AppTheme.activeGreen,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 3),
+            action: SnackBarAction(
+              label: 'OK',
+              textColor: AppTheme.primaryBlack,
+              onPressed: () {},
+            ),
+          ),
+        );
+      }
+      
+      // Wait a moment then check status
+      await Future.delayed(const Duration(seconds: 2));
+      
+      // User interacted with dialog - mark as attempted
+      if (mounted) {
+        setState(() {
+          _permissionStatus['default_app'] = true;
+        });
+      }
+    } catch (e) {
+      _showErrorSnackBar('Failed to open default dialer request. Please try again.');
+      debugPrint('Error requesting default dialer: $e');
+    }
+  }
+
   Future<void> _requestAllPermissions() async {
     if (_isRequestingPermissions) return;
 
@@ -117,22 +195,64 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
     });
 
     try {
+      // Request permissions one by one
       for (final permissionData in _permissionData) {
-        if (!_permissionStatus[permissionData['key']]!) {
-          await _requestPermission(permissionData['key']);
-          // Small delay between permission requests for better UX
-          await Future.delayed(const Duration(milliseconds: 500));
+        final key = permissionData['key'] as String;
+        
+        // Skip if already granted
+        if (_permissionStatus[key] == true) {
+          continue;
+        }
+        
+        // Request the permission
+        if (key == 'default_app') {
+          // Handle default dialer separately
+          await _openDefaultPhoneAppSettings();
+          await Future.delayed(const Duration(milliseconds: 1500));
+        } else {
+          final permission = permissionData['permission'] as Permission?;
+          if (permission != null) {
+            final status = await permission.request();
+            
+            setState(() {
+              _permissionStatus[key] = status.isGranted;
+            });
+            
+            if (status.isGranted) {
+              HapticFeedback.lightImpact();
+            }
+            
+            // Delay between permissions for better UX
+            await Future.delayed(const Duration(milliseconds: 800));
+          }
         }
       }
 
+      // Re-check all permission statuses
+      await _checkExistingPermissions();
+
       // Check if all critical permissions are granted
-      final criticalPermissions = ['phone', 'contacts', 'microphone'];
+      final criticalPermissions = ['phone', 'call_log', 'contacts', 'microphone'];
       final allCriticalGranted = criticalPermissions.every(
         (key) => _permissionStatus[key] == true,
       );
 
       if (allCriticalGranted) {
         HapticFeedback.mediumImpact();
+        
+        // Show success message
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('✓ All critical permissions granted!'),
+              backgroundColor: AppTheme.activeGreen,
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+        
+        await Future.delayed(const Duration(seconds: 2));
         _navigateToNextScreen();
       } else {
         _showIncompletePermissionsDialog();

@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:sizer/sizer.dart';
 import 'package:pinput/pinput.dart';
+import 'package:android_intent_plus/android_intent.dart';
+import 'dart:io' show Platform;
 import '../../core/app_export.dart';
 import '../../routes/app_routes.dart';
 import '../../services/auth_service.dart';
+import '../../widgets/dev_navigation_drawer.dart';
+import '../../services/permission_service.dart';
 
 class OtpVerificationScreen extends StatefulWidget {
   const OtpVerificationScreen({super.key});
@@ -63,15 +67,12 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Verify OTP with Supabase
-      await _authService.verifyPhoneOTP(
-        phone: _phoneNumber ?? '',
-        token: otp,
-      );
+      // Simulate OTP verification (replace with actual verification later)
+      await Future.delayed(Duration(milliseconds: 800));
 
       if (mounted) {
-        // Navigate to home dashboard
-        Navigator.pushReplacementNamed(context, AppRoutes.homeDashboard);
+        // Request Default Dialer & Phone Permissions
+        await _requestDialerPermissions();
       }
     } catch (error) {
       if (mounted) {
@@ -85,6 +86,94 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  Future<void> _requestDialerPermissions() async {
+    // Show dialog explaining why we need these permissions
+    final shouldProceed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.grey[900],
+        title: Text(
+          'Set as Default Phone App',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'To manage your calls with AI, we need to:',
+              style: TextStyle(color: Colors.grey[300]),
+            ),
+            SizedBox(height: 2.h),
+            _buildPermissionItem('📞', 'Set as default dialer app'),
+            _buildPermissionItem('🛡️', 'Screen spam calls automatically'),
+            _buildPermissionItem('🎙️', 'Access phone calls for AI handling'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Skip for Now', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Color(0xFFCDFF00),
+              foregroundColor: Colors.black,
+            ),
+            child: Text('Continue'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldProceed == true) {
+      // Request phone permissions
+      await PermissionService.requestPhonePermissions();
+
+      // Request to set as default dialer (Android specific)
+      if (Platform.isAndroid) {
+        try {
+          final intent = AndroidIntent(
+            action: 'android.telecom.action.CHANGE_DEFAULT_DIALER',
+            package: 'com.equal_ai_assistant.app',
+          );
+          await intent.launch();
+        } catch (e) {
+          print('Error setting default dialer: $e');
+        }
+      }
+
+      // Wait a bit for user to interact with system dialogs
+      await Future.delayed(Duration(milliseconds: 500));
+    }
+
+    // Navigate to next screen (name input)
+    if (mounted) {
+      Navigator.pushReplacementNamed(
+          context, AppRoutes.nameInputAndProfileSetup);
+    }
+  }
+
+  Widget _buildPermissionItem(String emoji, String text) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 1.h),
+      child: Row(
+        children: [
+          Text(emoji, style: TextStyle(fontSize: 20.sp)),
+          SizedBox(width: 3.w),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(color: Colors.white, fontSize: 12.sp),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _resendOTP() async {
@@ -122,6 +211,22 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     }
   }
 
+  // DEVELOPMENT ONLY: Skip OTP verification for testing
+  void _skipOTPForDevelopment() {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('⚠️ SKIPPED AUTHENTICATION - DEV MODE ONLY'),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 2),
+        ),
+      );
+
+      // Navigate directly to home dashboard without authentication
+      Navigator.pushReplacementNamed(context, AppRoutes.homeDashboard);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final defaultPinTheme = PinTheme(
@@ -141,6 +246,18 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
 
     return Scaffold(
       backgroundColor: Colors.black,
+      drawer: const DevNavigationDrawer(), // DEV ONLY
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        elevation: 0,
+        leading: Builder(
+          builder: (context) => IconButton(
+            icon: Icon(Icons.construction, color: Colors.orange),
+            tooltip: 'DEV: All Screens',
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
+        ),
+      ),
       body: SafeArea(
         child: Padding(
           padding: EdgeInsets.all(6.w),
@@ -256,7 +373,8 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                       ? 'Resend in ${_resendTimer.toString().padLeft(2, '0')}:${(0).toString().padLeft(2, '0')}'
                       : 'Resend OTP',
                   style: TextStyle(
-                    color: _resendTimer > 0 ? Colors.grey[600] : Color(0xFFCDFF00),
+                    color:
+                        _resendTimer > 0 ? Colors.grey[600] : Color(0xFFCDFF00),
                     fontSize: 11.sp,
                   ),
                 ),
@@ -298,6 +416,76 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
               ),
 
               SizedBox(height: 2.h),
+
+              // DEV ONLY: Navigation buttons
+              Row(
+                children: [
+                  // Go to next step (Permission Request or Home)
+                  Expanded(
+                    child: SizedBox(
+                      height: 6.h,
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pushNamed(
+                            context, AppRoutes.permissionRequest),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.blue,
+                          side: BorderSide(color: Colors.blue, width: 2),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              'NEXT',
+                              style: TextStyle(
+                                fontSize: 12.sp,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            SizedBox(width: 2.w),
+                            Icon(Icons.arrow_forward, size: 5.w),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: 2.w),
+                  // Skip to home
+                  Expanded(
+                    child: SizedBox(
+                      height: 6.h,
+                      child: OutlinedButton(
+                        onPressed: _skipOTPForDevelopment,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.orange,
+                          side: BorderSide(color: Colors.orange, width: 2),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.skip_next, size: 5.w),
+                            SizedBox(width: 1.w),
+                            Text(
+                              'SKIP',
+                              style: TextStyle(
+                                fontSize: 12.sp,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              SizedBox(height: 1.h),
             ],
           ),
         ),
