@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(flutter pub:*)",
+      "Bash(echo $PATH)",
+      "Read(//Users/neerajsaranala/flutter/**)",
+      "Read(//Users/neerajsaranala/Library/**)",
+      "Bash(/Users/neerajsaranala/flutter/bin/flutter pub get)",
+      "Bash(/Users/neerajsaranala/flutter/bin/flutter run)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
